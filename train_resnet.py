@@ -94,3 +94,10 @@
                                                            block_freqs=block_freqs)
 
     embd_, C_c_, excitations_, output_blocks_ = model(X1_p, tf.math.logical_not(is_test_p), scale=scale_arcface, margin=margin_arcface, spkr_labs=L_c_p)
+    #Note that margin and spkr_labs are only required during training (AMM/arcface loss requires them).
+    #embd_: the embeddings
+    #C_c_: the logits
+    #excitations_: the weighted from the Squeeze and Exhitation in case you want to visualize them.
+    #output_blocks_: the outputs from ResNet blocks.
+    #for training use this averaged loss:
+    loss_cf_ = tf.nn.sparse_softmax_cross_entropy_with_logits(labels = L_c_p, logits = C_c_)
