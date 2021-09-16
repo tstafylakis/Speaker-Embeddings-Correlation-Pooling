@@ -11,7 +11,7 @@ Apart from the experiments provided in the paper, the code allows the user to:
 (a) Combine standard statistics pooling with correlation pooling, by concatenating the two pooling layers into a single one, and
 (b) Extract correlation pooling from outputs of all 4 internal ResNet blocks (aka stages) and concatenate them in the pooling layer.
 
-The code can be more efficiently written using tensor-only operators. However, to fasilitate research we have implemented it using lists of tensors, e.g. after merging frequency bins to frequency ranges. Despite this inefficiency, we observe no differences between correlation pooling and standard stats pooling in training speed.
+The code can be more efficiently written using tensor-only operators. However, to facilitate research we have implemented it using lists of tensors, e.g. after merging frequency bins to frequency ranges. Despite this inefficiency, we observe no differences between correlation pooling and standard stats pooling in training speed.
 
 So, try it and let us know what you'll get!
 Themos
