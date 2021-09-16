@@ -1,8 +1,8 @@
 import copy
-
 import numpy as np
 import tensorflow as tf
-import r1.resnet.resnet_tiedSE_model_uniform_init as res
+import resnet_tiedSE_model_uniform_init as res
+
 _building_block_SE_v2   = res._building_block_SE_v2
 conv2d_fixed_padding = res.conv2d_fixed_padding
 block_layer          = res.block_layer
