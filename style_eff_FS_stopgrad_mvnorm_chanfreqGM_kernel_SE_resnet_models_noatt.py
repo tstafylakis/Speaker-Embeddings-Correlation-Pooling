@@ -120,17 +120,18 @@ class resnet_embedding(object):
 
     return tf.compat.v1.variable_scope(self.scope_name,
                                        custom_getter=self._custom_dtype_getter)
-
+  
+  # This is the function that estimates the channel-wise correlations.
   def _gram_matrix_resnet(self, input_tensor, triang_mask):
     input_shape = tf.shape(input_tensor)
-    input_tensor = tf.reshape(input_tensor,[-1,input_shape[1],input_shape[2]*input_shape[3]])
+    input_tensor = tf.reshape(input_tensor,[-1,input_shape[1],input_shape[2]*input_shape[3]]) #Reshaping according to freq. ranges
     if self.style_kernel['subtract_mean']:
         input_tensor -= tf.math.reduce_mean(input_tensor, axis=-1, keepdims=True)
     if self.style_kernel['divide_std']:
         input_tensor /= tf.math.reduce_std(input_tensor, axis=-1, keepdims=True) + 1e-5       
-    if self.style_kernel['kernel_type'] is None:
+    if self.style_kernel['kernel_type'] is None: # correlation pooling
       result = tf.linalg.einsum('bci,bdi->bcd', input_tensor, input_tensor)      
-    elif self.style_kernel['kernel_type']=='Gauss':
+    elif self.style_kernel['kernel_type']=='Gauss': # correlation pooling with Gaussian kernel, not presented in the paper
       ssq = tf.reduce_sum(tf.math.square(input_tensor),axis=-1,keepdims=True)
       result = ssq + tf.transpose(ssq, perm=[0,2,1])
       result -= 2*tf.linalg.einsum('bci,bdi->bcd', input_tensor, input_tensor)
@@ -145,10 +146,9 @@ class resnet_embedding(object):
     result = tf.math.l2_normalize(result,axis=-1) if self.style_kernel['l2norm_chn_style'] else tf.identity(result)    
     return result 
 
+  # Mask defining which elements of the correlation matrices to keep in pooling, to avoid repetitions and fixed values in diagonal.  
   def _create_triang_mask(self,nch):
     ones = tf.ones([nch,nch])
-    #tf.matrix_band_part(ones, 0, -1) # Upper triangular matrix of 0s and 1s                                                                             
-    #tf.matrix_band_part(ones, 0, 0)  # Diagonal matrix of 0s and 1s                                                                                       
     if self.style_kernel['mask_type'] == "uptriang":
         mask = tf.cast(tf.linalg.band_part(ones, 0, -1), dtype=tf.bool) # Make a bool mask                                                                 
         triang_mask_len = int(nch*(nch+1)/2.0)
@@ -163,7 +163,8 @@ class resnet_embedding(object):
         triang_mask_len = int(nch**2)
     return mask, triang_mask_len
 
-  def _create_1D_conv(self):
+  # created the 3D projection matrix (L), i.e. different projection matrix for each freq. range
+  def _create_1D_conv(self): 
     conv_1D_style_lst = []
     if self.style_kernel['apply_1D_bool'] == False:
       return conv_1D_style_lst
@@ -176,6 +177,7 @@ class resnet_embedding(object):
       conv_1D_style_lst.append(conv_1D_fb_lst)
     return conv_1D_style_lst
 
+  # created the 2D projection matrix (L), i.e. as single projection matrix for all freq. ranges
   def _create_1D_conv_freq_independent(self):
     conv_1D_style_lst = []
     if self.style_kernel['apply_1D_bool'] == False:
@@ -184,11 +186,13 @@ class resnet_embedding(object):
       conv_1D = tf.keras.layers.Conv2D(filters=new_dim, kernel_size=(1,1), data_format="channels_first") if new_dim is not None else None
       conv_1D_style_lst.append(conv_1D)
     return conv_1D_style_lst
-
+  
+  #Just apply the projection matrix L to the tensor
   def _apply_1D_conv(self,outputs,conv_1D):
     outputs = conv_1D(outputs) if conv_1D is not None else tf.identity(outputs)
     return outputs
-
+  
+  #It creates a list of tensors, one per frequency range 
   def _split_in_freq(self,outputs,freq_bands):
     outputs_lst = []
     if freq_bands is None:
@@ -263,7 +267,7 @@ class resnet_embedding(object):
       ######  This is the 2D or 3D projection tensor L which I describe in the paper (2D if 1D_conv_freq_ind==True)
       conv_1D_style_lst = self._create_1D_conv_freq_independent() if self.style_kernel['1D_conv_freq_ind'] else self._create_1D_conv()
       
-      ############ Add styles to stats  
+      ############ Add correlations to stats  
 
       stats_lst = [] # A list containing corr stats from each block and frequency range. In the paper I extract only from the last block (or stage).
       stats_len = 0
@@ -272,25 +276,25 @@ class resnet_embedding(object):
       for b_cnt,outputs_orig in enumerate(output_blocks):
           triang_mask = []
           r_DO = self.style_kernel['droprate_chn']
-          if self.style_kernel['style_in_stats_blocks'][b_cnt]:
+          if self.style_kernel['style_in_stats_blocks'][b_cnt]: # Do you want correlations from this block? 
               # noise_shape is set so that we sample only the channel dim (i.e. channelwise dropout)
               outputs = tf.cond(training, lambda: tf.nn.dropout(outputs_orig, rate=r_DO, noise_shape=[1,self.block_filters[b_cnt],1,1]),
                                 lambda: tf.identity(outputs_orig))
               nch = self.style_kernel['conv_new_chn_dims'][b_cnt] if self.style_kernel['apply_1D_bool'] else self.block_filters[b_cnt]
               outputs = self._apply_1D_conv(outputs,conv_1D_style_lst[b_cnt]) if self.style_kernel['1D_conv_freq_ind'] else tf.identity(outputs)
-              triang_mask, triang_mask_len = self._create_triang_mask(nch)
-              outputs_f_lst = self._split_in_freq(outputs,self.style_kernel['split_freq_bands'][b_cnt])
-              for f_cnt,outputs_f in enumerate(outputs_f_lst):
+              triang_mask, triang_mask_len = self._create_triang_mask(nch) #create the mask to keeponly unique and trainable variables
+              outputs_f_lst = self._split_in_freq(outputs,self.style_kernel['split_freq_bands'][b_cnt]) # split tensor according to freq ranges. 
+              for f_cnt,outputs_f in enumerate(outputs_f_lst): #for each freq range calculate correlation and append in to list
                   outputs_f = tf.stop_gradient(outputs_f) if self.style_kernel['stop_grad'] else tf.identity(outputs_f)
                   outputs_f = self._apply_1D_conv(outputs_f,conv_1D_style_lst[b_cnt][f_cnt]) if not self.style_kernel['1D_conv_freq_ind'] else tf.identity(outputs_f)
-                  stats_lst.append(self._gram_matrix_resnet(outputs_f, triang_mask))
+                  stats_lst.append(self._gram_matrix_resnet(outputs_f, triang_mask)) # Append the trainable variables of the freq range to the list
                   stats_len += triang_mask_len
                   
           triang_mask_lst.append(triang_mask)
       if (True in self.style_kernel['style_in_stats_blocks']):    
           stats_ = tf.concat(stats_lst,axis=1) # Concatenate the list to a single vector
           stats_.set_shape([None,stats_len])
-      ############ Add regular to stats   
+      ############ Add regular to stats in case you want to ...  
       if self.include_regular_stats:
         if self.has_std_in_pooling:
           inputs = tf.concat([tf.reduce_mean(input_tensor=inputs, axis=2, keepdims=True),tf.math.reduce_std(input_tensor=inputs, axis=2, keepdims=True)],3)
@@ -303,10 +307,10 @@ class resnet_embedding(object):
       elif not (True in self.style_kernel['style_in_stats_blocks']) and self.include_regular_stats: #just use standard stats pooling
         stats_ = stats_reg_
 
-      aplayers = []
       d_reg = kernel_regularizer= self.reg[reg_cnt]
       reg_cnt += 1      
 
+      # stats to embedding layer
       dense_ap1 = tf.keras.layers.Dense(units=self.embd_dim,trainable=True,use_bias=self.use_bias, kernel_regularizer=d_reg, bias_regularizer=d_reg, kernel_initializer=tf.compat.v1.keras.initializers.he_uniform(), bias_initializer=tf.compat.v1.keras.initializers.he_uniform())
 
       if self.bn_in_emb:
@@ -316,7 +320,7 @@ class resnet_embedding(object):
 
       self.params_up2stats = copy.copy(tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope=self.scope_name))
 
-      if self.add_class_layer:
+      if self.add_class_layer: # classification head layer
         dense_ap2 = tf.keras.layers.Dense(units=self.n_classes, trainable=True, use_bias=False, kernel_regularizer=self.reg[reg_cnt], kernel_constraint=tf.keras.constraints.UnitNorm(axis=0), name="ClassHead", kernel_initializer=tf.compat.v1.keras.initializers.he_uniform())
         reg_cnt += 1
       X_ = dense_ap1(stats_)
@@ -330,6 +334,7 @@ class resnet_embedding(object):
         C_c_ = dense_ap2(tf.stop_gradient(embd_)) if self.stop_grad_softmax else dense_ap2(embd_)
         ass_op_ = tf.assign( dense_ap2.kernel, dense_ap2.kernel_constraint(dense_ap2.kernel) )
         tf.compat.v1.add_to_collection(tf.GraphKeys.UPDATE_OPS, ass_op_ )
+        # Apply margin and scale of AAM loss:
         C_c_ = tf.cond(training, lambda: self.calculate_arcface_logits(C_c_, spkr_labs, self.n_classes, scale, margin), lambda: C_c_*scale)
         for l in dense_ap1.losses:
           tf.compat.v1.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, l )
