@@ -1,7 +1,4 @@
-
-from utils.misc import get_logger
 import copy
-log = get_logger()
 
 import numpy as np
 import tensorflow as tf
@@ -385,7 +382,7 @@ class resnet_embedding(object):
 
   def get_regularization(self):
       r = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.REGULARIZATION_LOSSES, scope=self.scope_name)
-      log.info("Regularized variables")
+      print("Regularized variables")
       for rr in r:
         print(rr)
       return sum(r)
