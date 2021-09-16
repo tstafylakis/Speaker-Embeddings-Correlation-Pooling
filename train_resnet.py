@@ -1,6 +1,7 @@
     #!/usr/bin/env python
     import numpy as np
     import tensorflow as tf
+    import style_eff_FS_stopgrad_mvnorm_chanfreqGM_kernel_SE_resnet_models_noatt as resnet_models
 
     # Data and label placeholders
     X1_p        = tf.placeholder('float32', shape=[None,None,80,1], name='X1_p') # Input tensor: Batch, Frames, frame-dim, input channels (1).                                                                                                  
