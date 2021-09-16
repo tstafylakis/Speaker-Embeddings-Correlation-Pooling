@@ -4,7 +4,7 @@
     import style_eff_FS_stopgrad_mvnorm_chanfreqGM_kernel_SE_resnet_models_noatt as resnet_models
 
     # Data and label placeholders
-    X1_p        = tf.placeholder('float32', shape=[None,None,80,1], name='X1_p') # Input tensor: Batch, Frames, frame-dim, input channels (1).                                                                                                  
+    X1_p        = tf.placeholder('float32', shape=[None,None,80,1], name='X1_p') # Input tensor: Batch, Frames, frame-dim (80), input channels (1).                                                                                                  
     is_test_p   = tf.placeholder(dtype='bool', shape=[], name='is_test_p')  # Is the training (False) or the testing phase (True)?                                                                                                      
     L_c_p       = tf.placeholder('int32', shape=[None], name='L_c_out_p')   # Speaker labels as indices                                             
 
@@ -30,7 +30,7 @@
     ### Embedding Config
     embd_dim = 256 # Embedding dimensions
     bn_in_emb = False # batch norm in embeddings.
-    bn_in_emb_train = True # Trainable batch norm in embeddings. 
+    bn_in_emb_train = True # Trainable batch norm in embeddings. No impact if bn_in_emb == False.
     l2_norm_embd = True # True for AMM/arcface lose
 
     ### Squeeze and Exhitation 
