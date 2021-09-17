@@ -13,6 +13,9 @@ Apart from the experiments provided in the paper, the code allows the user to:
 
 The code can be more efficiently written using tensor-only operators. However, to facilitate research we have implemented it using lists of tensors, e.g. after merging frequency bins to frequency ranges. Despite this inefficiency, we observe no differences between correlation pooling and standard stats pooling in training speed.
 
+Start with the file train_resnet.py, which creates the ResNet (with the pooling mechanism) and sets its parameters.
+All parameters are set so that you reproduce our best performing experiment (P7 in the paper).
+
 So, try it and let us know what you'll get!
 Themos
 
