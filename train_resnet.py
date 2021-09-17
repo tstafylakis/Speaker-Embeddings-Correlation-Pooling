@@ -1,4 +1,5 @@
     #!/usr/bin/env python
+
     import numpy as np
     import tensorflow as tf
     import style_eff_FS_stopgrad_mvnorm_chanfreqGM_kernel_SE_resnet_models_noatt as resnet_models
@@ -66,7 +67,8 @@
     # subtract_mean: True for correlation and covariance pooling
     # divide_std: True for correlation, False for covariance pooling.
     # droprate_chn: channel dropout rate (see paper)
-    # stop_grad: For experiments with not backpropagating corr loss to the ResNet. Set to False our proposed corr pooling.
+    # stop_grad: For experiments without backpropagating corr loss to the ResNet. Set it to True in case you want to experiment with a pretrained ResNet. 
+    # ... Set it to False for the proposed corr pooling.
     # activation_on_cov_feat: You may try activation functions on the covariance. Set to tf.identity for no activation. 
     # apply_1D_bool: True if you want to reduce num of channels. Set to True.  
     # 1D_conv_freq_ind: 2D vs 3D projection. Set to False for 3D projection, True for 2D.
